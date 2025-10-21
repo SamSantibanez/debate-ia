@@ -1,467 +1,179 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>⚖️ Debate Académico - IA Moderador</title>
-<style>
-body {
-  font-family: 'Poppins', 'Segoe UI', sans-serif;
-  background: linear-gradient(135deg, #eef3ff, #f8f9ff);
-  margin: 0;
-  height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow: hidden;
-}
+const express = require('express');
+require('dotenv').config();
+const OpenAI = require('openai');
 
-.chat-container {
-  width: 95%;
-  max-width: 780px;
-  height: 90vh;
-  display: flex;
-  flex-direction: column;
-  background: #ffffff;
-  border-radius: 18px;
-  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-  position: relative;
-  transition: opacity 0.6s ease;
-}
+const app = express();
+const port = 4000;
 
-.fade-out {
-  opacity: 0;
-  transition: opacity 0.6s ease;
-}
-
-.chat-header {
-  background-color: #3b4cc0;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px;
-  font-size: 1.1em;
-  font-weight: 600;
-}
-
-#timer, #turn-counter {
-  background: rgba(255,255,255,0.15);
-  padding: 6px 12px;
-  border-radius: 12px;
-  font-size: 0.9em;
-}
-
-.chat-messages {
-  flex-grow: 1;
-  padding: 20px;
-  overflow-y: auto;
-  background-color: #f6f8fc;
-  display: flex;
-  flex-direction: column;
-}
-
-.message-bubble {
-  max-width: 75%;
-  padding: 12px 18px;
-  border-radius: 18px;
-  margin: 6px 0;
-  line-height: 1.5;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-}
-
-.opponent {
-  align-self: flex-start;
-  background-color: #e7ecff;
-  color: #333;
-}
-.opponent .sender-name {
-  font-weight: bold;
-  color: #3b4cc0;
-  font-size: 0.9em;
-  margin-bottom: 4px;
-  text-align: left;
-}
-
-.user {
-  align-self: flex-end;
-  background-color: #e3f7e9;
-  color: #333;
-}
-.user .sender-name {
-  font-weight: bold;
-  color: #2b7a4b;
-  font-size: 0.9em;
-  margin-bottom: 4px;
-  text-align: right;
-}
-
-.moderator {
-  align-self: center;
-  background-color: #f0f3f9;
-  color: #444;
-  font-size: 0.95em;
-  border-radius: 12px;
-  padding: 8px 12px;
-  max-width: 90%;
-  text-align: center;
-  margin: 10px 0;
-}
-
-/* Input y botones */
-.chat-input {
-  display: flex;
-  padding: 12px 20px;
-  border-top: 1px solid #ddd;
-  background-color: #ffffff;
-}
-.chat-input input {
-  flex: 1;
-  padding: 12px;
-  border: 1px solid #ccc;
-  border-radius: 25px;
-  font-size: 1em;
-}
-.chat-input button {
-  margin-left: 10px;
-  background-color: #3b4cc0;
-  color: white;
-  border: none;
-  padding: 12px;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: background 0.3s;
-}
-.chat-input button:hover { background-color: #2c3b91; }
-
-.moderator-controls {
-  padding: 10px;
-  background-color: #f9f9fb;
-  border-top: 1px solid #ddd;
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-}
-.moderator-controls button {
-  border: none;
-  padding: 10px 16px;
-  border-radius: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  color: white;
-}
-#start-debate-btn { background-color: #2b7a4b; }
-#restart-btn { background-color: #007b83; display: none; }
-#end-debate-btn { background-color: #d9534f; }
-#download-btn { background-color: #3b4cc0; display:none; }
-
-/* Panel */
-#config-panel {
-  text-align: center;
-  padding: 20px;
-  background: #f2f4ff;
-  border-top: 2px solid #dce1ff;
-  border-bottom: 2px solid #dce1ff;
-}
-
-.step-box {
-  background: #fff;
-  border: 2px solid #dde3ff;
-  border-radius: 14px;
-  margin: 10px auto;
-  padding: 15px;
-  width: 85%;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-}
-
-.step-box h4 { margin-bottom: 8px; color: #3b4cc0; }
-
-.config-buttons button {
-  margin: 6px;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 10px;
-  font-weight: 600;
-  color: white;
-  cursor: pointer;
-  transition: 0.2s;
-  font-size: 0.95em;
-}
-.config-buttons button:hover { opacity: 0.85; }
-.dif-btn { background-color: #3b4cc0; }
-.pos-btn { background-color: #2b7a4b; }
-
-input[type=text] {
-  padding: 10px;
-  width: 90%;
-  border-radius: 8px;
-  border: 1px solid #bbb;
-  font-size: 0.95em;
-  margin-top: 5px;
-}
-
-/* Popup Veredicto */
-@keyframes popupFade {
-  from { opacity: 0; transform: translate(-50%, -45%) scale(0.9); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-</style>
-</head>
-<body>
-
-<div class="chat-container" id="chat-container">
-  <div class="chat-header">
-    <span>💬 Debate Académico | <span id="debate-topic">Pendiente</span></span>
-    <div>
-      <span id="turn-counter">Turno: 0 / 10</span>
-      <span id="timer">10:00</span>
-    </div>
-  </div>
-
-  <div class="chat-messages" id="chat-messages">
-    <div class="message-bubble moderator">
-      <strong>Moderador:</strong> Oprime <b>Iniciar</b> para configurar el debate virtual.
-    </div>
-  </div>
-
-  <div id="config-panel" style="display:none;">
-    <div class="step-box">
-      <h4>1️⃣ Escribe el tema del debate</h4>
-      <input type="text" id="topic-input" placeholder="Ejemplo: ¿Debería Chile usar energía nuclear?">
-    </div>
-
-    <div class="step-box">
-      <h4>2️⃣ Selecciona la dificultad del oponente</h4>
-      <div class="config-buttons">
-        <button class="dif-btn" data-level="Inicial">Inicial</button>
-        <button class="dif-btn" data-level="Medio">Medio</button>
-        <button class="dif-btn" data-level="Avanzado">Avanzado</button>
-      </div>
-    </div>
-
-    <div class="step-box">
-      <h4>3️⃣ Selecciona tu postura</h4>
-      <div class="config-buttons">
-        <button class="pos-btn" data-pos="A favor">A Favor</button>
-        <button class="pos-btn" data-pos="En contra">En Contra</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="moderator-controls">
-    <button id="start-debate-btn">▶️ Iniciar</button>
-    <button id="restart-btn">🔄 Reiniciar</button>
-    <button id="end-debate-btn" disabled>🛑 Finalizar</button>
-    <button id="download-btn">⬇️ Descargar</button>
-  </div>
-
-  <div class="chat-input">
-    <input type="text" id="message-input" placeholder="Escribe tu argumento..." disabled>
-    <button id="send-btn" disabled>✈️</button>
-  </div>
-</div>
-
-<script>
-const chatContainer = document.getElementById('chat-container');
-const chatMessages = document.getElementById('chat-messages');
-const messageInput = document.getElementById('message-input');
-const sendBtn = document.getElementById('send-btn');
-const debateTopicSpan = document.getElementById('debate-topic');
-const startDebateBtn = document.getElementById('start-debate-btn');
-const restartBtn = document.getElementById('restart-btn');
-const endDebateBtn = document.getElementById('end-debate-btn');
-const downloadBtn = document.getElementById('download-btn');
-const timerDisplay = document.getElementById('timer');
-const turnCounter = document.getElementById('turn-counter');
-const configPanel = document.getElementById('config-panel');
-
-let debateTopic = "";
-let opponentRole = '';
-let studentRole = '';
-let currentTurn = 'moderator';
-let turnCount = 0;
-let timer;
-let totalSeconds = 600;
-let difficulty = '';
-
-function addMessage(sender, content, type) {
-  content = content.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
-  const bubble = document.createElement('div');
-  bubble.className = `message-bubble ${type}`;
-  const nameSpan = document.createElement('span');
-  nameSpan.className = 'sender-name';
-  nameSpan.textContent = sender;
-  bubble.appendChild(nameSpan);
-  const contentDiv = document.createElement('div');
-  contentDiv.innerHTML = content;
-  bubble.appendChild(contentDiv);
-  chatMessages.appendChild(bubble);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-startDebateBtn.onclick = () => {
-  configPanel.style.display = "block";
-  startDebateBtn.disabled = true;
-  addMessage("Moderador", "👋 Bienvenido. Configura paso a paso tu tema, nivel y postura.", "moderator");
-};
-
-document.querySelectorAll('.dif-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    difficulty = btn.dataset.level;
-    addMessage("Moderador", `Dificultad seleccionada: ${difficulty}`, "moderator");
-  });
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-document.querySelectorAll('.pos-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    studentRole = btn.dataset.pos;
-    opponentRole = studentRole === "A favor" ? "En contra" : "A favor";
-    debateTopic = document.getElementById('topic-input').value.trim();
+app.use(express.json());
+app.use(express.static(__dirname));
 
-    if (!debateTopic || !difficulty) {
-      alert("Por favor escribe el tema y selecciona la dificultad.");
-      return;
-    }
-
-    configPanel.style.display = "none";
-    restartBtn.style.display = "inline-block";
-    endDebateBtn.disabled = false;
-
-    debateTopicSpan.textContent = debateTopic;
-    addMessage("Moderador", `Tema: "${debateTopic}". Nivel: ${difficulty}. El estudiante está ${studentRole}, la IA estará ${opponentRole}.`, "moderator");
-
-    currentTurn = 'user';
-    messageInput.disabled = false;
-    sendBtn.disabled = false;
-    totalSeconds = 600;
-    turnCount = 0;
-    timer = setInterval(updateTimer, 1000);
-  });
-});
-
-restartBtn.onclick = () => restartDebate();
-
-function restartDebate() {
-  chatContainer.classList.add('fade-out');
-  setTimeout(() => {
-    clearInterval(timer);
-    debateTopic = "";
-    opponentRole = "";
-    studentRole = "";
-    difficulty = "";
-    turnCount = 0;
-    totalSeconds = 600;
-    currentTurn = "moderator";
-
-    chatMessages.innerHTML = `
-      <div class="message-bubble moderator">
-        <strong>Moderador:</strong> Oprime <b>Iniciar</b> para configurar el debate virtual.
-      </div>
-    `;
-
-    debateTopicSpan.textContent = "Pendiente";
-    timerDisplay.textContent = "10:00";
-    turnCounter.textContent = "Turno: 0 / 10";
-    startDebateBtn.disabled = false;
-    restartBtn.style.display = "none";
-    endDebateBtn.disabled = true;
-    downloadBtn.style.display = "none";
-    messageInput.value = "";
-    messageInput.disabled = true;
-    sendBtn.disabled = true;
-    configPanel.style.display = "none";
-
-    chatContainer.classList.remove('fade-out');
-  }, 600);
+/* -----------------------------------------------------
+   FUNCIÓN: Llamar a OpenAI
+----------------------------------------------------- */
+async function callOpenAI(prompt, maxTokens = 500) {
+  try {
+    const completion = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+      max_tokens: maxTokens,
+    });
+    return completion.choices[0].message.content.trim();
+  } catch (error) {
+    console.error('❌ Error en callOpenAI:', error);
+    throw error;
+  }
 }
 
-sendBtn.onclick = sendMessage;
-messageInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
-
-async function sendMessage() {
-  const msg = messageInput.value.trim();
-  if (!msg) return;
-  turnCount++;
-  turnCounter.textContent = `Turno: ${turnCount} / 10`;
-  addMessage(`Estudiante [${studentRole}]`, msg, "user");
-  messageInput.value = '';
-  messageInput.disabled = true;
-  sendBtn.disabled = true;
-
-  // simulación simple de respuesta (quitar fetch si no hay servidor)
-  setTimeout(() => {
-    addMessage(`IA Oponente [${opponentRole}]`, "Respuesta automática de la IA (modo demostración).", "opponent");
-    messageInput.disabled = false;
-    sendBtn.disabled = false;
-    if (++turnCount >= 10) showVerdict();
-  }, 1000);
+/* -----------------------------------------------------
+   LIMPIAR HISTORIAL
+----------------------------------------------------- */
+function cleanHistory(history) {
+  return history
+    .filter(msg => msg.sender === 'user' || msg.sender === 'ia')
+    .map(msg => ({
+      role: msg.sender === 'user' ? 'Estudiante' : 'IA Oponente',
+      content: msg.content
+        .replace(/<br\s*\/?>/gm, '\n')
+        .replace(/<\/?strong>/g, '')
+        .trim()
+    }));
 }
 
-function showVerdict() {
-  clearInterval(timer);
-  addMessage("Moderador", "🏁 Fin del debate. Analizando resultados...", "moderator");
+/* -----------------------------------------------------
+   ENDPOINT 1: OPONENTE IA (con nivel de dificultad)
+----------------------------------------------------- */
+app.post('/api/debate', async (req, res) => {
+  const { topic, role, history, lastArgument } = req.body;
+  console.log(`\n🎯 OPONENTE IA - Tema: "${topic}", Rol: "${role}"`);
 
-  setTimeout(() => {
-    const winner = Math.random() > 0.5 ? "Estudiante" : "IA Oponente";
-    const popup = document.createElement("div");
-    Object.assign(popup.style, {
-      position: "absolute",
-      top: "50%",
-      left: "50%",
-      transform: "translate(-50%, -50%)",
-      background: "#fffdf5",
-      border: "3px solid #f2d675",
-      borderRadius: "16px",
-      padding: "25px",
-      width: "80%",
-      maxWidth: "600px",
-      textAlign: "center",
-      boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
-      zIndex: "999",
-      animation: "popupFade 0.5s ease"
+  try {
+    // Extraer nivel de dificultad si viene incluido
+    const match = topic.match(/Nivel:\s*(Inicial|Medio|Avanzado)/i);
+    const level = match ? match[1].toLowerCase() : 'medio';
+
+    // Contexto del historial
+    const cleanedHistory = cleanHistory(history);
+    let context = `DEBATE SOBRE: "${topic}"\n\n`;
+    cleanedHistory.forEach(msg => {
+      context += `${msg.role}: ${msg.content}\n\n`;
     });
 
-    popup.innerHTML = `
-      <h2 style="color:#3b4cc0;">📜 Veredicto Final</h2>
-      <p style="font-size:1.05em;">Ganador: <b style="color:#2b7a4b;">${winner}</b></p>
-      <p style="font-size:0.95em; color:#444;">El debate ha concluido satisfactoriamente.</p>
-      <hr>
-      <button id="downloadChat" style="margin:5px;padding:8px 16px;background:#3b4cc0;color:#fff;border:none;border-radius:8px;cursor:pointer;">⬇️ Descargar Chat</button>
-      <button id="newDebate" style="margin:5px;padding:8px 16px;background:#2b7a4b;color:#fff;border:none;border-radius:8px;cursor:pointer;">🆕 Nuevo Debate</button>
-    `;
-    document.body.appendChild(popup);
+    // Reglas base
+    const systemRules = `
+Eres un sistema de debate académico con tres roles:
+1. Estudiante (Usuario humano) – elige una postura (A favor o En contra).
+2. IA Oponente – defiende la postura contraria a la del estudiante.
+3. Mediador – evalúa y determina un ganador al finalizar.
 
-    document.getElementById("downloadChat").onclick = () => downloadChat();
-    document.getElementById("newDebate").onclick = () => {
-      popup.remove();
-      restartDebate();
-    };
+INSTRUCCIONES GENERALES:
+- El debate tiene máximo 10 turnos (5 por participante) o 10 minutos.
+- Las respuestas deben ser claras, coherentes, sin usar asteriscos ni formato Markdown.
+- No uses símbolos ** ni listas innecesarias.
+- Las intervenciones deben sonar humanas y argumentativas.
+`;
 
-    downloadBtn.style.display = "inline-block";
-  }, 1500);
-}
+    // Ajuste según nivel
+    let levelGuidelines = "";
+    if (level === "inicial") {
+      levelGuidelines = `
+NIVEL INICIAL:
+- Usa frases simples y ejemplos cotidianos.
+- Argumentos breves (2-3 oraciones).
+- Evita vocabulario técnico o citas académicas.
+`;
+    } else if (level === "medio") {
+      levelGuidelines = `
+NIVEL MEDIO:
+- Usa un tono equilibrado, razonado y respetuoso.
+- 3-5 oraciones por intervención.
+- Puedes usar ejemplos o comparaciones sencillas.
+`;
+    } else {
+      levelGuidelines = `
+NIVEL AVANZADO:
+- Usa un lenguaje formal, estructurado y profundo.
+- 4-6 oraciones con lógica y contraargumentos sólidos.
+- Puedes citar teorías o conceptos si corresponde.
+`;
+    }
 
-function downloadChat() {
-  let chatText = "💬 Debate Académico - Registro\n\n";
-  Array.from(chatMessages.children).forEach(el => {
-    const sender = el.querySelector('.sender-name')?.textContent || "Moderador";
-    const content = el.innerText.replace(sender, '').trim();
-    chatText += `${sender}: ${content}\n\n`;
-  });
-  const blob = new Blob([chatText], { type: "text/plain" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `debate_${new Date().toISOString().slice(0,19)}.txt`;
-  link.click();
-}
+    // Prompt final
+    const prompt = `
+${systemRules}
+${levelGuidelines}
 
-function updateTimer() {
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  timerDisplay.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
-  if (--totalSeconds < 0) showVerdict();
-}
-</script>
-</body>
-</html>
+TEMA: "${topic.replace(/\| Nivel:.*/i, '').trim()}"
+TU POSTURA: ${role}
+POSTURA DEL OPONENTE: ${role === 'A favor' ? 'En contra' : 'A favor'}
+
+HISTORIAL DEL DEBATE:
+${context}
+
+ÚLTIMO ARGUMENTO DEL ESTUDIANTE:
+"${lastArgument}"
+
+Responde solo con tu intervención como IA Oponente.
+No repitas instrucciones ni reglas. No uses **asteriscos**.
+`;
+
+    const response = await callOpenAI(prompt, 500);
+
+    // Limpieza final (quitar posibles ** o caracteres raros)
+    const cleanResponse = response.replace(/\*/g, '').trim();
+
+    res.json({ response: cleanResponse });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Error al generar respuesta: ' + error.message });
+  }
+});
+
+/* -----------------------------------------------------
+   ENDPOINT 2: MEDIADOR IA (veredicto final)
+----------------------------------------------------- */
+app.post('/api/judge_turn', async (req, res) => {
+  const { topic, opponentRole, history } = req.body;
+  console.log(`\n⚖️ MEDIADOR - Evaluando veredicto final...`);
+
+  try {
+    const cleanedHistory = cleanHistory(history);
+    let debateContext = `DEBATE FINAL: "${topic}"\n\n`;
+    cleanedHistory.forEach((msg, i) => {
+      debateContext += `${i + 1}. ${msg.role}: ${msg.content}\n\n`;
+    });
+
+    const prompt = `
+Eres el MEDIADOR de un debate académico.
+
+${debateContext}
+
+Analiza objetivamente los argumentos de ambas partes y redacta un veredicto académico final.
+
+INSTRUCCIONES:
+1. Declara quién gana (Estudiante o IA Oponente).
+2. Justifica brevemente (claridad, evidencia, coherencia o persuasión).
+3. Termina con la frase: "La verdad se construye en el diálogo razonado. Fin del debate."
+Usa un tono solemne, justo y educativo.
+`;
+
+    const verdict = await callOpenAI(prompt, 400);
+    const cleanVerdict = verdict.replace(/\*/g, '').trim();
+    res.json({ nextTurn: 'end', verdict: cleanVerdict });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Error al generar veredicto: ' + error.message });
+  }
+});
+
+/* -----------------------------------------------------
+   INICIAR SERVIDOR
+----------------------------------------------------- */
+app.listen(port, () => {
+  console.log(`🚀 Servidor corriendo en http://localhost:${port}`);
+});
