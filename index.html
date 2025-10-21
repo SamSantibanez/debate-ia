@@ -5,115 +5,239 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>⚖️ Debate Académico - Moderador IA</title>
 <style>
-/* ESTILOS OMITIDOS POR ESPACIO (puedes mantener los tuyos anteriores) */
+/* ESTILOS AÑADIDOS/MODIFICADOS PARA EL BOTÓN DE INICIO */
 body{font-family:'Poppins',sans-serif;background:#f7f8fb;margin:0;display:flex;justify-content:center;align-items:center;height:100vh;}
 .chat-container{width:95%;max-width:780px;background:#fff;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.1);display:flex;flex-direction:column;height:90vh;overflow:hidden;}
 .chat-header{background:#3b4cc0;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:12px 18px;font-weight:600;}
 .chat-messages{flex:1;padding:15px;overflow-y:auto;background:#f1f3f9;}
 .message-bubble{margin:8px 0;padding:12px 16px;border-radius:14px;max-width:75%;}
-.user{align-self:flex-end;background:#dcfce7;}
-.opponent{align-self:flex-start;background:#e8edff;}
-.moderator{align-self:center;background:#f3f4f6;text-align:center;font-style:italic;}
+.user{align-self:flex-end;background:#dcfce7;color:#10b981;} /* Color verde para el usuario */
+.opponent{align-self:flex-start;background:#e8edff;color:#3b4cc0;} /* Color azul para el oponente */
+.moderator{align-self:center;background:#f3f4f6;text-align:center;font-style:italic;color:#6b7280;width:90%;}
 .chat-input{display:flex;padding:12px;border-top:1px solid #ddd;}
 .chat-input input{flex:1;padding:10px;border-radius:20px;border:1px solid #ccc;}
-.chat-input button{background:#3b4cc0;color:#fff;border:none;border-radius:50%;width:42px;height:42px;margin-left:10px;cursor:pointer;}
+.chat-input button{background:#3b4cc0;color:#fff;border:none;border-radius:50%;width:42px;height:42px;margin-left:10px;cursor:pointer;transition:background 0.3s;}
+.chat-input button:disabled{background:#a3b3e3;cursor:not-allowed;}
+.start-button{padding:10px 20px;margin-top:10px;background:#10b981;color:white;border:none;border-radius:20px;cursor:pointer;font-weight:bold;}
+.start-container{text-align:center;padding:20px;}
 </style>
 </head>
 <body>
 
 <div class="chat-container" id="chat-container">
-  <div class="chat-header">
-    <span>💬 Debate Académico | <span id="debate-topic">Pendiente</span></span>
-    <div><span id="turn-counter">Turno: 0 / 10</span> <span id="timer">10:00</span></div>
-  </div>
-  <div class="chat-messages" id="chat-messages">
-    <div class="message-bubble moderator"><b>Moderador:</b> Oprime <b>Iniciar</b> para configurar el debate virtual.</div>
-  </div>
-  <div class="chat-input">
-    <input type="text" id="message-input" placeholder="Escribe tu argumento..." disabled>
-    <button id="send-btn" disabled>✈️</button>
-  </div>
+    <div class="chat-header">
+        <span>💬 Debate Académico | <span id="debate-topic">Marihuana Legal</span></span>
+        <div><span id="turn-counter">Turno: 0 / 10</span> <span id="timer">10:00</span></div>
+    </div>
+    <div class="chat-messages" id="chat-messages">
+        <div class="message-bubble moderator">
+            <b>Moderador:</b> Oprime <b>Iniciar Debate</b> para configurar y comenzar el debate virtual.
+        </div>
+        <div class="message-bubble moderator start-container" id="start-area">
+            <button id="start-btn" class="start-button">🚀 Iniciar Debate</button>
+        </div>
+    </div>
+    <div class="chat-input">
+        <input type="text" id="message-input" placeholder="Escribe tu argumento..." disabled>
+        <button id="send-btn" disabled>✈️</button>
+    </div>
 </div>
 
 <script>
-const messageInput=document.getElementById("message-input");
-const sendBtn=document.getElementById("send-btn");
-const chatMessages=document.getElementById("chat-messages");
-const turnCounter=document.getElementById("turn-counter");
-const timerDisplay=document.getElementById("timer");
-let debateTopic="Marihuana Legal",studentRole="En contra",opponentRole="A favor",difficulty="Medio";
-let turnCount=0,totalSeconds=600;
+const messageInput = document.getElementById("message-input");
+const sendBtn = document.getElementById("send-btn");
+const chatMessages = document.getElementById("chat-messages");
+const turnCounter = document.getElementById("turn-counter");
+const timerDisplay = document.getElementById("timer");
+const startBtn = document.getElementById("start-btn"); // Nuevo: Botón de inicio
+const startArea = document.getElementById("start-area"); // Nuevo: Área del botón de inicio
 
-function addMessage(sender,content,type){
-  const div=document.createElement("div");
-  div.className=`message-bubble ${type}`;
-  div.innerHTML=`<b>${sender}:</b> ${content}`;
-  chatMessages.appendChild(div);
-  chatMessages.scrollTop=chatMessages.scrollHeight;
+// Parámetros de configuración inicial
+let debateTopic = "La legalización de la Marihuana debe ser implementada globalmente";
+let studentRole = "En contra"; // Rol del usuario (tú)
+let opponentRole = "A favor"; // Rol de la IA oponente
+let difficulty = "Medio"; // Nivel de dificultad
+let maxTurns = 10;
+let totalTime = 600; // 10 minutos
+let timerInterval;
+
+let turnCount = 0;
+let totalSeconds = totalTime;
+
+// Función para añadir mensajes al chat
+function addMessage(sender, content, type) {
+    const div = document.createElement("div");
+    div.className = `message-bubble ${type}`;
+    div.innerHTML = `<b>${sender}:</b> ${content}`;
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-function getCleanHistory(){
-  return Array.from(chatMessages.children).map(el=>({
-    sender:el.classList.contains("user")?"user":el.classList.contains("opponent")?"ia":"moderator",
-    content:el.innerText
-  }));
+// Función para obtener el historial limpio
+function getCleanHistory() {
+    return Array.from(chatMessages.children)
+        .filter(el => !el.classList.contains("start-container")) // Excluir el área del botón de inicio
+        .map(el => ({
+            sender: el.classList.contains("user") ? "user" : el.classList.contains("opponent") ? "ia" : "moderator",
+            content: el.innerText.replace(/Moderador:|Estudiante \[.*?\]:|IA Oponente \[.*?\]:/, '').trim() // Limpiar el nombre del remitente
+        }));
 }
 
-sendBtn.onclick=sendMessage;
-messageInput.addEventListener("keydown",e=>{if(e.key==="Enter")sendMessage();});
+// Iniciar debate: Configura y comienza el chat
+async function startDebate() {
+    // 1. Ocultar el botón de inicio
+    startArea.style.display = 'none';
+    
+    // 2. Mostrar tema y roles en el encabezado
+    document.getElementById("debate-topic").textContent = `${debateTopic.substring(0, 30)}...`;
+    
+    // 3. Informar al usuario
+    addMessage("Moderador", 
+        `El debate ha comenzado:
+        <br><b>Tema:</b> ${debateTopic}
+        <br><b>Tu Rol:</b> ${studentRole}
+        <br><b>Rol IA:</b> ${opponentRole}
+        <br><b>Dificultad:</b> ${difficulty}. ¡Tienes ${totalTime / 60} minutos para ${maxTurns} turnos!
+        <br><b>Turno 1:</b> Comienza la <b>IA Oponente</b> con su argumento inicial.`, 
+        "moderator");
 
-async function sendMessage(){
-  const msg=messageInput.value.trim();
-  if(!msg)return;
-  turnCount++;
-  turnCounter.textContent=`Turno: ${turnCount} / 10`;
-  addMessage(`Estudiante [${studentRole}]`,msg,"user");
-  messageInput.value="";
-  messageInput.disabled=true;
-  sendBtn.disabled=true;
+    // 4. Iniciar el temporizador
+    startTimer();
 
-  try{
-    const response=await fetch("https://TU_SERVIDOR_RENDER.onrender.com/api/debate",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        topic:debateTopic+" | Nivel: "+difficulty,
-        role:opponentRole,
-        history:getCleanHistory(),
-        lastArgument:msg
-      }),
-    });
-    const data=await response.json();
-    addMessage(`IA Oponente [${opponentRole}]`,data.response,"opponent");
-  }catch(error){
-    console.error(error);
-    addMessage("Moderador","⚠️ Error al conectar con la IA. Verifica que el servidor esté activo.","moderator");
-  }
-
-  messageInput.disabled=false;
-  sendBtn.disabled=false;
-  if(++turnCount>=10)showVerdict();
+    // 5. Iniciar la conversación con el primer argumento de la IA (Turno 1)
+    await getOpponentInitialArgument();
+    
+    // 6. Habilitar la entrada del usuario
+    messageInput.disabled = false;
+    sendBtn.disabled = false;
 }
 
-async function showVerdict(){
-  clearInterval(timer);
-  addMessage("Moderador","🏁 Fin del debate. Analizando resultados...","moderator");
-  try{
-    const response=await fetch("https://TU_SERVIDOR_RENDER.onrender.com/api/judge_turn",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        topic:debateTopic,
-        opponentRole,
-        history:getCleanHistory()
-      }),
-    });
-    const data=await response.json();
-    addMessage("Moderador",data.verdict,"moderator");
-  }catch(e){
-    addMessage("Moderador","⚠️ Error al generar veredicto.","moderator");
-  }
+// Función del temporizador
+function startTimer() {
+    timerInterval = setInterval(() => {
+        totalSeconds--;
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+        if (totalSeconds <= 0) {
+            clearInterval(timerInterval);
+            showVerdict("¡Tiempo agotado!");
+        }
+    }, 1000);
 }
+
+// Obtener el argumento inicial de la IA (Primer turno)
+async function getOpponentInitialArgument() {
+    try {
+        const response = await fetch("https://TU_SERVIDOR_RENDER.onrender.com/api/debate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                topic: debateTopic + " | Nivel: " + difficulty,
+                role: opponentRole,
+                history: [], // Historial vacío para el primer turno
+                lastArgument: "" // Sin argumento previo
+            }),
+        });
+        const data = await response.json();
+        turnCount = 1; // Primer turno
+        turnCounter.textContent = `Turno: ${turnCount} / ${maxTurns}`;
+        addMessage(`IA Oponente [${opponentRole}]`, data.response, "opponent");
+    } catch (error) {
+        console.error("Error al obtener el argumento inicial:", error);
+        addMessage("Moderador", "⚠️ Error al conectar con la IA para el inicio. Verifica el servidor.", "moderator");
+        messageInput.disabled = true;
+        sendBtn.disabled = true;
+    }
+}
+
+
+// Enviar mensaje del usuario y obtener respuesta de la IA
+async function sendMessage() {
+    const msg = messageInput.value.trim();
+    if (!msg || totalSeconds <= 0) return;
+    
+    // Turno del estudiante
+    addMessage(`Estudiante [${studentRole}]`, msg, "user");
+    messageInput.value = "";
+    messageInput.disabled = true;
+    sendBtn.disabled = true;
+
+    // Aumentar contador de turno para el siguiente turno (el de la IA)
+    turnCount++;
+
+    if (turnCount > maxTurns) {
+        showVerdict("¡Se ha alcanzado el límite de turnos!");
+        return;
+    }
+
+    turnCounter.textContent = `Turno: ${turnCount} / ${maxTurns}`;
+
+    // Obtener respuesta de la IA (El turno del oponente)
+    try {
+        const history = getCleanHistory();
+        const response = await fetch("https://TU_SERVIDOR_RENDER.onrender.com/api/debate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                topic: debateTopic + " | Nivel: " + difficulty,
+                role: opponentRole,
+                history: history,
+                lastArgument: msg
+            }),
+        });
+        const data = await response.json();
+        addMessage(`IA Oponente [${opponentRole}]`, data.response, "opponent");
+    } catch (error) {
+        console.error(error);
+        addMessage("Moderador", "⚠️ Error al conectar con la IA. Verifica que el servidor esté activo.", "moderator");
+    }
+
+    // El turno del estudiante es el siguiente
+    if (++turnCount > maxTurns) {
+        showVerdict("¡Se ha alcanzado el límite de turnos!");
+    } else {
+        turnCounter.textContent = `Turno: ${turnCount} / ${maxTurns}`;
+        messageInput.disabled = false;
+        sendBtn.disabled = false;
+    }
+}
+
+// Mostrar el veredicto final
+async function showVerdict(reason) {
+    clearInterval(timerInterval);
+    messageInput.disabled = true;
+    sendBtn.disabled = true;
+    addMessage("Moderador", `🏁 Fin del debate. (${reason}) Analizando resultados...`, "moderator");
+    
+    try {
+        const response = await fetch("https://TU_SERVIDOR_RENDER.onrender.com/api/judge_turn", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                topic: debateTopic,
+                opponentRole: opponentRole,
+                history: getCleanHistory()
+            }),
+        });
+        const data = await response.json();
+        addMessage("Moderador", `🏆 Veredicto Final: ${data.verdict}`, "moderator");
+    } catch (e) {
+        console.error(e);
+        addMessage("Moderador", "⚠️ Error al generar veredicto final.","moderator");
+    }
+}
+
+// Asignar eventos
+startBtn.onclick = startDebate;
+sendBtn.onclick = sendMessage;
+messageInput.addEventListener("keydown", e => { if (e.key === "Enter") sendMessage(); });
+
+// Inicializar la visualización del tiempo
+const initialMinutes = Math.floor(totalTime / 60);
+const initialSeconds = totalTime % 60;
+timerDisplay.textContent = `${initialMinutes.toString().padStart(2, '0')}:${initialSeconds.toString().padStart(2, '0')}`;
 </script>
 </body>
 </html>
