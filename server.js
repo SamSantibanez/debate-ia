@@ -1,179 +1,102 @@
-const express = require('express');
-require('dotenv').config();
-const OpenAI = require('openai');
-
+// server.js
+const express = require("express");
+const OpenAI = require("openai");
+require("dotenv").config();
+const path = require("path");
 const app = express();
-const port = 4000;
+const PORT = process.env.PORT || 4000;
 
+// Configura cliente OpenAI
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Middleware
 app.use(express.json());
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname)));
 
-/* -----------------------------------------------------
-   FUNCIÓN: Llamar a OpenAI
------------------------------------------------------ */
-async function callOpenAI(prompt, maxTokens = 500) {
+// ----------------------
+//   RUTA: /api/debate
+// ----------------------
+app.post("/api/debate", async (req, res) => {
+  const { topic, role, history, lastArgument } = req.body;
+
   try {
+    const messages = [
+      {
+        role: "system",
+        content: `Eres un experto académico en debates educativos. 
+        Tu papel es representar la postura "${role}" sobre el tema indicado. 
+        Responde con argumentos sólidos, breves y coherentes, 
+        sin incluir lenguaje ofensivo ni redundante. 
+        Limita tus respuestas a 3 o 4 líneas.`,
+      },
+      {
+        role: "user",
+        content: `Tema del debate: ${topic}\nÚltimo argumento del estudiante: ${lastArgument}`,
+      },
+    ];
+
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.7,
-      max_tokens: maxTokens,
-    });
-    return completion.choices[0].message.content.trim();
-  } catch (error) {
-    console.error('❌ Error en callOpenAI:', error);
-    throw error;
-  }
-}
-
-/* -----------------------------------------------------
-   LIMPIAR HISTORIAL
------------------------------------------------------ */
-function cleanHistory(history) {
-  return history
-    .filter(msg => msg.sender === 'user' || msg.sender === 'ia')
-    .map(msg => ({
-      role: msg.sender === 'user' ? 'Estudiante' : 'IA Oponente',
-      content: msg.content
-        .replace(/<br\s*\/?>/gm, '\n')
-        .replace(/<\/?strong>/g, '')
-        .trim()
-    }));
-}
-
-/* -----------------------------------------------------
-   ENDPOINT 1: OPONENTE IA (con nivel de dificultad)
------------------------------------------------------ */
-app.post('/api/debate', async (req, res) => {
-  const { topic, role, history, lastArgument } = req.body;
-  console.log(`\n🎯 OPONENTE IA - Tema: "${topic}", Rol: "${role}"`);
-
-  try {
-    // Extraer nivel de dificultad si viene incluido
-    const match = topic.match(/Nivel:\s*(Inicial|Medio|Avanzado)/i);
-    const level = match ? match[1].toLowerCase() : 'medio';
-
-    // Contexto del historial
-    const cleanedHistory = cleanHistory(history);
-    let context = `DEBATE SOBRE: "${topic}"\n\n`;
-    cleanedHistory.forEach(msg => {
-      context += `${msg.role}: ${msg.content}\n\n`;
+      messages,
+      max_tokens: 200,
     });
 
-    // Reglas base
-    const systemRules = `
-Eres un sistema de debate académico con tres roles:
-1. Estudiante (Usuario humano) – elige una postura (A favor o En contra).
-2. IA Oponente – defiende la postura contraria a la del estudiante.
-3. Mediador – evalúa y determina un ganador al finalizar.
-
-INSTRUCCIONES GENERALES:
-- El debate tiene máximo 10 turnos (5 por participante) o 10 minutos.
-- Las respuestas deben ser claras, coherentes, sin usar asteriscos ni formato Markdown.
-- No uses símbolos ** ni listas innecesarias.
-- Las intervenciones deben sonar humanas y argumentativas.
-`;
-
-    // Ajuste según nivel
-    let levelGuidelines = "";
-    if (level === "inicial") {
-      levelGuidelines = `
-NIVEL INICIAL:
-- Usa frases simples y ejemplos cotidianos.
-- Argumentos breves (2-3 oraciones).
-- Evita vocabulario técnico o citas académicas.
-`;
-    } else if (level === "medio") {
-      levelGuidelines = `
-NIVEL MEDIO:
-- Usa un tono equilibrado, razonado y respetuoso.
-- 3-5 oraciones por intervención.
-- Puedes usar ejemplos o comparaciones sencillas.
-`;
-    } else {
-      levelGuidelines = `
-NIVEL AVANZADO:
-- Usa un lenguaje formal, estructurado y profundo.
-- 4-6 oraciones con lógica y contraargumentos sólidos.
-- Puedes citar teorías o conceptos si corresponde.
-`;
-    }
-
-    // Prompt final
-    const prompt = `
-${systemRules}
-${levelGuidelines}
-
-TEMA: "${topic.replace(/\| Nivel:.*/i, '').trim()}"
-TU POSTURA: ${role}
-POSTURA DEL OPONENTE: ${role === 'A favor' ? 'En contra' : 'A favor'}
-
-HISTORIAL DEL DEBATE:
-${context}
-
-ÚLTIMO ARGUMENTO DEL ESTUDIANTE:
-"${lastArgument}"
-
-Responde solo con tu intervención como IA Oponente.
-No repitas instrucciones ni reglas. No uses **asteriscos**.
-`;
-
-    const response = await callOpenAI(prompt, 500);
-
-    // Limpieza final (quitar posibles ** o caracteres raros)
-    const cleanResponse = response.replace(/\*/g, '').trim();
-
-    res.json({ response: cleanResponse });
-
+    const responseText =
+      completion.choices[0].message.content || "No hay respuesta generada.";
+    res.json({ response: responseText });
   } catch (error) {
-    res.status(500).json({ error: 'Error al generar respuesta: ' + error.message });
+    console.error("Error en /api/debate:", error);
+    res.status(500).json({ response: "Error generando respuesta del debate." });
   }
 });
 
-/* -----------------------------------------------------
-   ENDPOINT 2: MEDIADOR IA (veredicto final)
------------------------------------------------------ */
-app.post('/api/judge_turn', async (req, res) => {
+// ----------------------
+//   RUTA: /api/judge_turn
+// ----------------------
+app.post("/api/judge_turn", async (req, res) => {
   const { topic, opponentRole, history } = req.body;
-  console.log(`\n⚖️ MEDIADOR - Evaluando veredicto final...`);
 
   try {
-    const cleanedHistory = cleanHistory(history);
-    let debateContext = `DEBATE FINAL: "${topic}"\n\n`;
-    cleanedHistory.forEach((msg, i) => {
-      debateContext += `${i + 1}. ${msg.role}: ${msg.content}\n\n`;
+    const formatted = history
+      .map((h) => `${h.sender.toUpperCase()}: ${h.content}`)
+      .join("\n");
+
+    const messages = [
+      {
+        role: "system",
+        content: `Eres un mediador imparcial de debates académicos. 
+        Debes analizar los argumentos del estudiante y de la IA Oponente 
+        para decidir quién presentó un razonamiento más claro, coherente y fundamentado.
+        Tu respuesta debe comenzar con: "Veredicto Académico Final: Ganador ...", 
+        y luego explicar brevemente por qué.`,
+      },
+      {
+        role: "user",
+        content: `Tema: ${topic}\n\nHistorial del debate:\n${formatted}`,
+      },
+    ];
+
+    const completion = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages,
+      max_tokens: 300,
     });
 
-    const prompt = `
-Eres el MEDIADOR de un debate académico.
-
-${debateContext}
-
-Analiza objetivamente los argumentos de ambas partes y redacta un veredicto académico final.
-
-INSTRUCCIONES:
-1. Declara quién gana (Estudiante o IA Oponente).
-2. Justifica brevemente (claridad, evidencia, coherencia o persuasión).
-3. Termina con la frase: "La verdad se construye en el diálogo razonado. Fin del debate."
-Usa un tono solemne, justo y educativo.
-`;
-
-    const verdict = await callOpenAI(prompt, 400);
-    const cleanVerdict = verdict.replace(/\*/g, '').trim();
-    res.json({ nextTurn: 'end', verdict: cleanVerdict });
-
+    const verdict =
+      completion.choices[0].message.content ||
+      "Veredicto no disponible. Error al analizar.";
+    res.json({ verdict });
   } catch (error) {
-    res.status(500).json({ error: 'Error al generar veredicto: ' + error.message });
+    console.error("Error en /api/judge_turn:", error);
+    res.status(500).json({ verdict: "Error generando veredicto." });
   }
 });
 
-/* -----------------------------------------------------
-   INICIAR SERVIDOR
------------------------------------------------------ */
-app.listen(port, () => {
-  console.log(`🚀 Servidor corriendo en http://localhost:${port}`);
+// ----------------------
+//   SERVIDOR EN MARCHA
+// ----------------------
+app.listen(PORT, () => {
+  console.log(`✅ Servidor corriendo en http://localhost:${PORT}`);
 });

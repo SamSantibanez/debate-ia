@@ -340,9 +340,7 @@ document.querySelectorAll('.pos-btn').forEach(btn => {
   });
 });
 
-restartBtn.onclick = () => restartDebate();
-
-function restartDebate() {
+restartBtn.onclick = () => {
   chatContainer.classList.add('fade-out');
   setTimeout(() => {
     clearInterval(timer);
@@ -374,7 +372,7 @@ function restartDebate() {
 
     chatContainer.classList.remove('fade-out');
   }, 600);
-}
+};
 
 sendBtn.onclick = sendMessage;
 messageInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
@@ -389,78 +387,105 @@ async function sendMessage() {
   messageInput.disabled = true;
   sendBtn.disabled = true;
 
-  // simulación simple de respuesta (quitar fetch si no hay servidor)
-  setTimeout(() => {
-    addMessage(`IA Oponente [${opponentRole}]`, "Respuesta automática de la IA (modo demostración).", "opponent");
-    messageInput.disabled = false;
-    sendBtn.disabled = false;
-    if (++turnCount >= 10) showVerdict();
-  }, 1000);
+  const response = await fetch('/api/debate', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      topic: debateTopic + " | Nivel: " + difficulty,
+      role: opponentRole,
+      history: getCleanHistory(),
+      lastArgument: msg
+    }),
+  });
+  const data = await response.json();
+  addMessage(`IA Oponente [${opponentRole}]`, data.response, "opponent");
+  messageInput.disabled = false;
+  sendBtn.disabled = false;
+  if (++turnCount >= 10) showVerdict();
 }
 
-function showVerdict() {
+async function showVerdict() {
   clearInterval(timer);
   addMessage("Moderador", "🏁 Fin del debate. Analizando resultados...", "moderator");
 
-  setTimeout(() => {
-    const winner = Math.random() > 0.5 ? "Estudiante" : "IA Oponente";
-    const popup = document.createElement("div");
-    Object.assign(popup.style, {
-      position: "absolute",
-      top: "50%",
-      left: "50%",
-      transform: "translate(-50%, -50%)",
-      background: "#fffdf5",
-      border: "3px solid #f2d675",
-      borderRadius: "16px",
-      padding: "25px",
-      width: "80%",
-      maxWidth: "600px",
-      textAlign: "center",
-      boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
-      zIndex: "999",
-      animation: "popupFade 0.5s ease"
-    });
-
-    popup.innerHTML = `
-      <h2 style="color:#3b4cc0;">📜 Veredicto Final</h2>
-      <p style="font-size:1.05em;">Ganador: <b style="color:#2b7a4b;">${winner}</b></p>
-      <p style="font-size:0.95em; color:#444;">El debate ha concluido satisfactoriamente.</p>
-      <hr>
-      <button id="downloadChat" style="margin:5px;padding:8px 16px;background:#3b4cc0;color:#fff;border:none;border-radius:8px;cursor:pointer;">⬇️ Descargar Chat</button>
-      <button id="newDebate" style="margin:5px;padding:8px 16px;background:#2b7a4b;color:#fff;border:none;border-radius:8px;cursor:pointer;">🆕 Nuevo Debate</button>
-    `;
-    document.body.appendChild(popup);
-
-    document.getElementById("downloadChat").onclick = () => downloadChat();
-    document.getElementById("newDebate").onclick = () => {
-      popup.remove();
-      restartDebate();
-    };
-
-    downloadBtn.style.display = "inline-block";
-  }, 1500);
-}
-
-function downloadChat() {
-  let chatText = "💬 Debate Académico - Registro\n\n";
-  Array.from(chatMessages.children).forEach(el => {
-    const sender = el.querySelector('.sender-name')?.textContent || "Moderador";
-    const content = el.innerText.replace(sender, '').trim();
-    chatText += `${sender}: ${content}\n\n`;
+  const response = await fetch('/api/judge_turn', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      topic: debateTopic,
+      opponentRole,
+      history: getCleanHistory()
+    }),
   });
-  const blob = new Blob([chatText], { type: "text/plain" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `debate_${new Date().toISOString().slice(0,19)}.txt`;
-  link.click();
+  const data = await response.json();
+
+  const summary = data.verdict.replace(/\*/g, "").split(".")[0];
+  const winnerMatch = data.verdict.match(/ganador\s+(.*?)\s/i);
+  const winner = winnerMatch ? winnerMatch[1].trim() : "IA Oponente";
+
+  const popup = document.createElement("div");
+  Object.assign(popup.style, {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    background: "#fffdf5",
+    border: "3px solid #f2d675",
+    borderRadius: "16px",
+    padding: "25px",
+    width: "80%",
+    maxWidth: "600px",
+    textAlign: "center",
+    boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
+    zIndex: "999",
+    animation: "popupFade 0.5s ease"
+  });
+
+  popup.innerHTML = `
+    <h2 style="color:#3b4cc0;">📜 Veredicto Académico Final</h2>
+    <p style="font-size:1.05em;">Ganador: <b style="color:#2b7a4b;">${winner}</b></p>
+    <p style="font-size:0.95em; color:#444;">${summary}.</p>
+    <hr style="margin:12px 0;">
+    <p style="font-style:italic; color:#666;">“La verdad se construye en el diálogo razonado. Fin del debate.”</p>
+    <button id="closePopup" style="margin-top:10px; padding:8px 16px; background:#3b4cc0; color:#fff; border:none; border-radius:8px; cursor:pointer;">Cerrar</button>
+  `;
+  document.body.appendChild(popup);
+  document.getElementById("closePopup").onclick = () => popup.remove();
+
+  // Mostrar botón de descarga
+  downloadBtn.style.display = "inline-block";
 }
+
+// Descargar historial completo
+downloadBtn.onclick = () => {
+  const lines = Array.from(chatMessages.children).map((el, i) => {
+    const who = el.querySelector(".sender-name")?.textContent || "Moderador";
+    const msg = el.innerText.replace(who, "").trim();
+    return `${i + 1}. ${who}: ${msg}`;
+  }).join("\n\n");
+
+  const blob = new Blob([`DEBATE: ${debateTopic}\n\n${lines}`], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Debate_${debateTopic.replace(/\s+/g, "_")}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
 function updateTimer() {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
   timerDisplay.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
   if (--totalSeconds < 0) showVerdict();
+}
+
+function getCleanHistory() {
+  return Array.from(chatMessages.children).map(el => ({
+    sender: el.classList.contains('user') ? 'user' :
+             el.classList.contains('opponent') ? 'ia' : 'moderator',
+    content: el.innerText
+  }));
 }
 </script>
 </body>
